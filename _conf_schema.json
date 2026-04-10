@@ -3,12 +3,14 @@
     "description": "欢迎消息发送的目标频道ID",
     "type": "string",
     "default": "",
-    "hint": "在KOOK中右键频道 -> 复制ID"
+    "hint": "在KOOK客户端中右键点击频道 -> 复制ID",
+    "obvious_hint": true
   },
   "server_name": {
-    "description": "服务器名称, 显示在欢迎消息中",
+    "description": "服务器名称",
     "type": "string",
-    "default": "[FiveM] 夜未央"
+    "default": "[FiveM] 夜未央",
+    "hint": "显示在欢迎消息中的服务器名称"
   },
   "welcome_title": {
     "description": "欢迎卡片标题",
@@ -16,9 +18,10 @@
     "default": "🎉 欢迎新成员加入!"
   },
   "welcome_message": {
-    "description": "欢迎消息内容, 使用 {user} 代表@用户, {server} 代表服务器名",
-    "type": "string",
-    "default": "欢迎加入 **{server}** 服务器!\n希望您能在这里体验到不同的游戏快乐 🚗"
+    "description": "欢迎消息内容",
+    "type": "text",
+    "default": "欢迎加入 **{server}** 服务器!\n希望您能在这里体验到不同的游戏快乐 🚗",
+    "hint": "支持KMarkdown格式, 使用 {server} 代表服务器名"
   },
   "button1_text": {
     "description": "第一个按钮的文字",
@@ -28,7 +31,8 @@
   "button1_link": {
     "description": "第一个按钮跳转链接",
     "type": "string",
-    "default": ""
+    "default": "",
+    "hint": "留空则不显示此按钮"
   },
   "button2_text": {
     "description": "第二个按钮的文字",
@@ -38,26 +42,43 @@
   "button2_link": {
     "description": "第二个按钮跳转链接",
     "type": "string",
-    "default": ""
+    "default": "",
+    "hint": "留空则不显示此按钮"
   },
   "show_guide_links": {
-    "description": "是否显示底部引导链接",
+    "description": "是否显示底部引导区域",
     "type": "bool",
     "default": true
   },
   "guide_text": {
-    "description": "底部引导文字, 支持KMarkdown格式",
-    "type": "string",
-    "default": "📌 新人必看 👉 (chn)规则一览(chn) 👉 (chn)公告通知(chn)\n(chn)角色请求(chn)\n💡 如有问题请联系管理员 | 祝您游戏愉快!"
+    "description": "底部引导文字",
+    "type": "text",
+    "default": "📌 新人必看 👉 (chn)规则一览(chn) 👉 (chn)公告通知(chn)\n(chn)角色请求(chn)\n💡 如有问题请联系管理员 | 祝您游戏愉快!",
+    "hint": "支持KMarkdown格式, (chn)频道名(chn) 会自动转换为频道链接"
   },
   "card_theme": {
-    "description": "卡片主题颜色: primary/success/danger/warning/info/secondary/none",
+    "description": "卡片主题样式",
     "type": "string",
-    "default": "none"
+    "default": "none",
+    "options": ["none", "primary", "success", "danger", "warning", "info", "secondary"],
+    "hint": "none为无边框样式, 可配合下方自定义颜色使用"
   },
   "card_color": {
-    "description": "卡片边框颜色 (16进制, 如 #7CFC00)",
+    "description": "卡片边框颜色",
     "type": "string",
-    "default": "#7CFC00"
+    "default": "#7CFC00",
+    "hint": "仅当主题样式为none时生效, 使用16进制颜色值"
+  },
+  "button1_theme": {
+    "description": "第一个按钮样式",
+    "type": "string",
+    "default": "success",
+    "options": ["primary", "success", "danger", "warning", "info", "secondary"]
+  },
+  "button2_theme": {
+    "description": "第二个按钮样式",
+    "type": "string",
+    "default": "primary",
+    "options": ["primary", "success", "danger", "warning", "info", "secondary"]
   }
 }

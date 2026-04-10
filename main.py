@@ -73,8 +73,10 @@ class KookManagerPlugin(Star):
         )
         button1_text = self._get_config("button1_text", "📝 申请白名单")
         button1_link = self._get_config("button1_link", "")
+        button1_theme = self._get_config("button1_theme", "success")
         button2_text = self._get_config("button2_text", "🎮 连接服务器")
         button2_link = self._get_config("button2_link", "")
+        button2_theme = self._get_config("button2_theme", "primary")
         show_guide = self._get_config("show_guide_links", True)
         guide_text = self._get_config(
             "guide_text",
@@ -113,7 +115,7 @@ class KookManagerPlugin(Star):
         if button1_link:
             buttons.append({
                 "type": "button",
-                "theme": "success",
+                "theme": button1_theme,
                 "text": {
                     "type": "plain-text",
                     "content": button1_text
@@ -124,7 +126,7 @@ class KookManagerPlugin(Star):
         if button2_link:
             buttons.append({
                 "type": "button",
-                "theme": "primary",
+                "theme": button2_theme,
                 "text": {
                     "type": "plain-text",
                     "content": button2_text
