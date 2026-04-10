@@ -4,25 +4,21 @@ KOOK 群管理插件
 """
 
 import re
-from astrbot.api import logger
+from astrbot.api import logger, AstrBotConfig
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api.message_components import Plain, Reply
 
 
-@register("kook_manager", "YWY", "KOOK 群管理工具", "1.1.0")
+@register("kook_manager", "YWY", "KOOK 群管理工具", "1.2.0")
 class KookManagerPlugin(Star):
-    def __init__(self, context: Context):
+    def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
-        self.context = context
+        self.config = config
 
     def _get_config(self, key: str, default=None):
         """获取配置项"""
-        try:
-            value = self.context.get_config(key)
-            return value if value is not None else default
-        except Exception:
-            return default
+        return self.config.get(key, default)
 
     def _parse_keyword_rules(self) -> list[dict]:
         """解析关键词规则配置"""
