@@ -39,12 +39,18 @@
     "description": "KOOK Bot Token",
     "type": "string",
     "default": "",
-    "hint": "用于主动向任意频道发送 KMarkdown 或 Card 消息. 仅保存在 AstrBot 插件配置中"
+    "hint": "用于主动向任意频道发送 KMarkdown 或 Card 消息, 以及查询成员角色用于权限判定. 仅保存在 AstrBot 插件配置中"
   },
   "kook_api_base": {
     "description": "KOOK API 地址",
     "type": "string",
     "default": "https://www.kookapp.cn/api/v3",
     "hint": "默认使用官方 API 地址. 一般无需修改"
+  },
+  "allowed_role_ids": {
+    "description": "允许执行管理指令的 KOOK 角色 ID 列表",
+    "type": "text",
+    "default": "",
+    "hint": "支持逗号分隔或每行一个 role_id. 权限模型为 AstrBot 管理员 OR KOOK 角色白名单"
   }
 }
