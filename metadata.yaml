@@ -2,8 +2,8 @@ name: astrbot_plugin_kook_manager
 display_name: KOOK 群管理
 desc: KOOK 平台群管理工具, 包含欢迎卡片、群管功能等
 author: YWY
-repo: ""
-version: 1.0.0
+repo: "https://github.com/DyroS3/astrbot_plugin_kook_manager"
+version: 1.0.1
 support_platforms:
   - kook
 astrbot_version: ">=4.20"
