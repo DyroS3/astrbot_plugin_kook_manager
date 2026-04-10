@@ -108,6 +108,31 @@ class KookManagerPlugin(Star):
                 return value
         return ""
 
+    def _get_event_channel_id(self, event: AstrMessageEvent) -> str:
+        """尽量从当前消息上下文提取 channel_id"""
+        for attr_name in ("channel_id", "target_id", "session_id", "conversation_id", "group_id"):
+            value = self._get_message_attr(event, attr_name)
+            if value:
+                return value
+
+        message_str = str(getattr(event, "message_str", "")).strip()
+        if message_str:
+            match = re.match(r"^/?\S+\s+(\S+)", message_str)
+            if match:
+                return match.group(1).strip()
+        return ""
+
+    async def _get_guild_id_by_channel_id(self, channel_id: str) -> str:
+        """通过频道 ID 反查 guild_id"""
+        params = {
+            "target_id": channel_id,
+        }
+        data = await self._request_kook_api("GET", "/channel/view", params=params)
+        guild_id = str(data.get("guild_id", "")).strip()
+        if not guild_id:
+            raise ValueError(f"频道 {channel_id} 未返回 guild_id")
+        return guild_id
+
     async def _get_kook_guild_member_roles(self, guild_id: str, user_id: str) -> set[str]:
         """查询用户在指定服务器中的角色 ID 集合"""
         params = {
@@ -134,7 +159,14 @@ class KookManagerPlugin(Star):
 
         guild_id = self._get_event_guild_id(event)
         if not guild_id:
-            return "当前消息上下文无法识别 guild_id, 不能按 KOOK 角色判权. 请在服务器频道内使用该指令, 或让管理员将您的 UID 加入 AstrBot 管理员名单."
+            channel_id = self._get_event_channel_id(event)
+            if not channel_id:
+                return "当前消息上下文无法识别 guild_id 或 channel_id, 不能按 KOOK 角色判权. 请在服务器频道内使用该指令, 或让管理员将您的 UID 加入 AstrBot 管理员名单."
+            try:
+                guild_id = await self._get_guild_id_by_channel_id(channel_id)
+            except Exception as exc:
+                logger.error(f"[KookManager] 通过频道反查 guild_id 失败: {exc}")
+                return f"当前消息上下文无法识别 guild_id, 且通过 channel_id={channel_id} 反查失败: {exc}"
 
         user_id = str(event.get_sender_id()).strip()
         if not user_id:
