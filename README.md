@@ -7,6 +7,10 @@ AstrBot 插件 - KOOK 平台群管理工具
 - 关键词自动回复 (支持引用回复)
 - 支持正则表达式匹配
 - 多种匹配模式: 包含/完全匹配/开头/结尾
+- 管理员主动发送 KMarkdown 到任意 KOOK 频道
+- 管理员主动发送 Card 消息到任意 KOOK 频道
+- 支持多行 KMarkdown 和多行 Card JSON 输入
+- 支持从文件发送 Card JSON
 - 更多功能开发中...
 
 ## 安装
@@ -41,3 +45,85 @@ r:签到|打卡 => 签到成功! (正则匹配示例)
 | exact | 消息完全等于关键词才匹配 |
 | startswith | 消息以关键词开头才匹配 |
 | endswith | 消息以关键词结尾才匹配 |
+
+### 主动发送配置
+
+- `kook_bot_token`: KOOK Bot Token. 用于主动调用 KOOK HTTP API 发送消息
+- `kook_api_base`: KOOK API 根地址. 默认值为 `https://www.kookapp.cn/api/v3`
+
+## 指令
+
+以下指令默认仅管理员可用.
+
+### 发送 KMarkdown
+
+```text
+/kooksendmd <channel_id> <content>
+```
+
+示例:
+
+```text
+/kooksendmd 123456789 **公告**\n这是一个 KMarkdown 消息
+```
+
+也支持直接输入多行内容:
+
+```text
+/kooksendmd 123456789 **公告**
+这是第二行
+这是第三行
+```
+
+### 发送 Card 消息
+
+```text
+/kooksendcard <channel_id> <card_json>
+```
+
+示例:
+
+```text
+/kooksendcard 123456789 [{"type":"card","theme":"primary","size":"lg","modules":[{"type":"section","text":{"type":"kmarkdown","content":"**Hello** from AstrBot"}}]}]
+```
+
+也支持多行 JSON:
+
+```text
+/kooksendcard 123456789 [
+  {
+    "type": "card",
+    "theme": "primary",
+    "modules": [
+      {
+        "type": "section",
+        "text": {
+          "type": "kmarkdown",
+          "content": "**Hello** from AstrBot"
+        }
+      }
+    ]
+  }
+]
+```
+
+### 从文件发送 Card 消息
+
+```text
+/kooksendcardfile <channel_id> <file_path>
+```
+
+示例:
+
+```text
+/kooksendcardfile 123456789 cards/welcome.json
+/kooksendcardfile 123456789 "C:/kook/cards/announce.json"
+```
+
+## 说明
+
+- 该功能直接调用 KOOK `message/create` 接口发送频道消息
+- KMarkdown 使用消息类型 `9`
+- CardMessage 使用消息类型 `10`
+- `kooksendcardfile` 支持相对插件目录路径和绝对路径
+- 若发送失败, 请先检查 Bot 是否在目标频道所在服务器内, 且具备发言权限
