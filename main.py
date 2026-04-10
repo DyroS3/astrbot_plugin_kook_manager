@@ -1,16 +1,16 @@
 """
 KOOK 群管理插件
-提供 KOOK 平台的群管理功能, 包括欢迎新成员等
+提供 KOOK 平台的群管理功能, 包括关键词自动回复等
 """
 
-import json
-import aiohttp
+import re
 from astrbot.api import logger
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
+from astrbot.api.message_components import Plain, Reply
 
 
-@register("kook_manager", "YWY", "KOOK 群管理工具", "1.0.0")
+@register("kook_manager", "YWY", "KOOK 群管理工具", "1.1.0")
 class KookManagerPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
@@ -20,244 +20,93 @@ class KookManagerPlugin(Star):
         """获取配置项"""
         return self.context.get_config(key, default)
 
-    async def _get_user_info(self, user_id: str, guild_id: str, token: str) -> dict:
-        """通过 KOOK API 获取用户信息"""
-        url = "https://www.kookapp.cn/api/v3/user/view"
-        headers = {"Authorization": f"Bot {token}"}
-        params = {"user_id": user_id, "guild_id": guild_id}
+    def _parse_keyword_rules(self) -> list[dict]:
+        """解析关键词规则配置"""
+        rules_text = self._get_config("keyword_rules", "")
+        if not rules_text:
+            return []
 
+        rules = []
+        for line in rules_text.strip().split("\n"):
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+
+            if "=>" in line:
+                parts = line.split("=>", 1)
+                if len(parts) == 2:
+                    keyword = parts[0].strip()
+                    response = parts[1].strip()
+                    if keyword and response:
+                        rules.append({
+                            "keyword": keyword,
+                            "response": response,
+                            "is_regex": keyword.startswith("r:"),
+                        })
+        return rules
+
+    def _match_keyword(self, message: str, rule: dict) -> bool:
+        """检查消息是否匹配关键词"""
+        keyword = rule["keyword"]
+        match_mode = self._get_config("match_mode", "contains")
+
+        if rule["is_regex"]:
+            pattern = keyword[2:]
+            try:
+                return bool(re.search(pattern, message, re.IGNORECASE))
+            except re.error:
+                logger.error(f"[KookManager] 正则表达式错误: {pattern}")
+                return False
+
+        message_lower = message.lower()
+        keyword_lower = keyword.lower()
+
+        if match_mode == "exact":
+            return message_lower == keyword_lower
+        elif match_mode == "startswith":
+            return message_lower.startswith(keyword_lower)
+        elif match_mode == "endswith":
+            return message_lower.endswith(keyword_lower)
+        else:
+            return keyword_lower in message_lower
+
+    @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
+    async def on_group_message(self, event: AstrMessageEvent):
+        """监听群消息, 匹配关键词并回复"""
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=headers, params=params) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if data.get("code") == 0:
-                            return data.get("data", {})
-        except Exception as e:
-            logger.error(f"[KookWelcome] 获取用户信息失败: {e}")
-        return {}
+            enable_keyword = self._get_config("enable_keyword_reply", True)
+            if not enable_keyword:
+                return
 
-    async def _send_card_message(self, channel_id: str, card_content: list, token: str):
-        """发送卡片消息到指定频道"""
-        url = "https://www.kookapp.cn/api/v3/message/create"
-        headers = {
-            "Authorization": f"Bot {token}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "target_id": channel_id,
-            "type": 10,
-            "content": json.dumps(card_content)
-        }
+            message = event.message_str.strip()
+            if not message:
+                return
 
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, headers=headers, json=payload) as resp:
-                    result = await resp.json()
-                    if result.get("code") != 0:
-                        logger.error(f"[KookWelcome] 发送卡片消息失败: {result}")
+            rules = self._parse_keyword_rules()
+            if not rules:
+                return
+
+            enable_reply_quote = self._get_config("enable_reply_quote", True)
+
+            for rule in rules:
+                if self._match_keyword(message, rule):
+                    response_text = rule["response"]
+                    response_text = response_text.replace("\\n", "\n")
+
+                    logger.info(f"[KookManager] 关键词匹配: '{rule['keyword']}' -> 回复")
+
+                    if enable_reply_quote:
+                        message_id = event.message_obj.message_id
+                        yield event.chain_result([
+                            Reply(id=message_id),
+                            Plain(text=response_text)
+                        ])
                     else:
-                        logger.info(f"[KookWelcome] 欢迎卡片发送成功")
-                    return result
-        except Exception as e:
-            logger.error(f"[KookWelcome] 发送卡片消息异常: {e}")
-            return None
+                        yield event.plain_result(response_text)
 
-    def _build_welcome_card(self, user_id: str, username: str, avatar_url: str) -> list:
-        """构建欢迎卡片消息"""
-        server_name = self._get_config("server_name", "[FiveM] 夜未央")
-        welcome_title = self._get_config("welcome_title", "🎉 欢迎新成员加入!")
-        welcome_message = self._get_config(
-            "welcome_message",
-            "欢迎加入 **{server}** 服务器!\n希望您能在这里体验到不同的游戏快乐 🚗"
-        )
-        button1_text = self._get_config("button1_text", "📝 申请白名单")
-        button1_link = self._get_config("button1_link", "")
-        button1_theme = self._get_config("button1_theme", "success")
-        button2_text = self._get_config("button2_text", "🎮 连接服务器")
-        button2_link = self._get_config("button2_link", "")
-        button2_theme = self._get_config("button2_theme", "primary")
-        show_guide = self._get_config("show_guide_links", True)
-        guide_text = self._get_config(
-            "guide_text",
-            "📌 新人必看 👉 (chn)规则一览(chn) 👉 (chn)公告通知(chn)\n(chn)角色请求(chn)\n💡 如有问题请联系管理员 | 祝您游戏愉快!"
-        )
-        card_theme = self._get_config("card_theme", "none")
-        card_color = self._get_config("card_color", "#7CFC00")
-
-        welcome_text = welcome_message.replace("{server}", server_name).replace("{user}", f"(met){user_id}(met)")
-
-        modules = [
-            {
-                "type": "header",
-                "text": {
-                    "type": "plain-text",
-                    "content": welcome_title
-                }
-            },
-            {
-                "type": "section",
-                "mode": "right",
-                "text": {
-                    "type": "kmarkdown",
-                    "content": f"(met){user_id}(met)\n\n{welcome_text}"
-                },
-                "accessory": {
-                    "type": "image",
-                    "src": avatar_url,
-                    "size": "lg",
-                    "circle": True
-                }
-            }
-        ]
-
-        buttons = []
-        if button1_link:
-            buttons.append({
-                "type": "button",
-                "theme": button1_theme,
-                "text": {
-                    "type": "plain-text",
-                    "content": button1_text
-                },
-                "value": button1_link,
-                "click": "link"
-            })
-        if button2_link:
-            buttons.append({
-                "type": "button",
-                "theme": button2_theme,
-                "text": {
-                    "type": "plain-text",
-                    "content": button2_text
-                },
-                "value": button2_link,
-                "click": "link"
-            })
-
-        if buttons:
-            modules.append({
-                "type": "action-group",
-                "elements": buttons
-            })
-
-        if show_guide and guide_text:
-            modules.append({"type": "divider"})
-            modules.append({
-                "type": "context",
-                "elements": [
-                    {
-                        "type": "kmarkdown",
-                        "content": guide_text
-                    }
-                ]
-            })
-
-        card = {
-            "type": "card",
-            "theme": card_theme,
-            "size": "lg",
-            "modules": modules
-        }
-
-        if card_color and card_theme == "none":
-            card["color"] = card_color
-
-        return [card]
-
-    def _is_kook_platform(self, event: AstrMessageEvent) -> bool:
-        """判断是否为 KOOK 平台事件"""
-        try:
-            platform_name = getattr(event, "platform_name", "")
-            if platform_name and "kook" in platform_name.lower():
-                return True
-
-            adapter = getattr(event, "adapter", None)
-            if adapter:
-                adapter_name = getattr(adapter, "name", "") or type(adapter).__name__
-                if "kook" in adapter_name.lower():
-                    return True
-
-            raw = getattr(event.message_obj, "raw_message", {})
-            if isinstance(raw, dict):
-                if "verify_token" in raw or raw.get("channel_type") in ["GROUP", "PERSON"]:
-                    return True
-        except Exception:
-            pass
-        return False
-
-    def _extract_bot_token(self, event: AstrMessageEvent) -> str:
-        """从事件中提取 Bot Token"""
-        try:
-            client = getattr(event, "bot", None)
-            if client and hasattr(client, "token"):
-                return client.token
-
-            adapter = getattr(event, "adapter", None)
-            if adapter:
-                if hasattr(adapter, "token"):
-                    return adapter.token
-                if hasattr(adapter, "config") and hasattr(adapter.config, "token"):
-                    return adapter.config.token
-                if hasattr(adapter, "_token"):
-                    return adapter._token
-
-            raw = getattr(event.message_obj, "raw_message", {})
-            if isinstance(raw, dict):
-                token = raw.get("_bot_token") or raw.get("bot_token")
-                if token:
-                    return token
-        except Exception as e:
-            logger.debug(f"[KookWelcome] 提取 token 异常: {e}")
-        return ""
-
-    @filter.event_message_type(filter.EventMessageType.ALL)
-    async def on_event(self, event: AstrMessageEvent):
-        """监听所有事件, 筛选新成员加入事件"""
-        try:
-            raw = getattr(event.message_obj, "raw_message", None)
-            if not raw or not isinstance(raw, dict):
-                return
-
-            if not self._is_kook_platform(event):
-                return
-
-            msg_type = raw.get("type")
-            if msg_type != 255:
-                return
-
-            extra = raw.get("extra", {})
-            event_type = extra.get("type", "")
-
-            if event_type != "joined_guild":
-                return
-
-            body = extra.get("body", {})
-            user_id = body.get("user_id", "")
-            guild_id = raw.get("target_id", "")
-
-            if not user_id:
-                logger.warning("[KookWelcome] 无法获取新成员用户ID")
-                return
-
-            channel_id = self._get_config("welcome_channel_id", "")
-            if not channel_id:
-                logger.warning("[KookWelcome] 未配置欢迎频道ID, 请在插件配置中设置 welcome_channel_id")
-                return
-
-            token = self._extract_bot_token(event)
-            if not token:
-                logger.error("[KookWelcome] 无法获取 Bot Token, 请检查适配器配置")
-                return
-
-            user_info = await self._get_user_info(user_id, guild_id, token)
-            username = user_info.get("nickname") or user_info.get("username", f"用户{user_id}")
-            avatar_url = user_info.get("avatar", "https://img.kookapp.cn/assets/avatar.png")
-
-            logger.info(f"[KookWelcome] 新成员加入: {username} ({user_id})")
-
-            card = self._build_welcome_card(user_id, username, avatar_url)
-            await self._send_card_message(channel_id, card, token)
+                    only_first = self._get_config("only_first_match", True)
+                    if only_first:
+                        break
 
         except Exception as e:
-            logger.error(f"[KookWelcome] 处理事件异常: {e}")
+            logger.error(f"[KookManager] 处理消息异常: {e}")
