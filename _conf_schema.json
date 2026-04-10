@@ -23,6 +23,12 @@
     "default": true,
     "hint": "开启后回复会带上对原消息的引用"
   },
+  "enable_mention_user": {
+    "description": "回复时@用户",
+    "type": "bool",
+    "default": true,
+    "hint": "开启后回复会@触发消息的用户"
+  },
   "only_first_match": {
     "description": "仅响应第一个匹配的规则",
     "type": "bool",

@@ -7,10 +7,10 @@ import re
 from astrbot.api import logger, AstrBotConfig
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
-from astrbot.api.message_components import Plain, Reply
+from astrbot.api.message_components import Plain, Reply, At
 
 
-@register("kook_manager", "YWY", "KOOK 群管理工具", "1.2.0")
+@register("kook_manager", "YWY", "KOOK 群管理工具", "1.3.0")
 class KookManagerPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -87,6 +87,7 @@ class KookManagerPlugin(Star):
                 return
 
             enable_reply_quote = self._get_config("enable_reply_quote", True)
+            enable_mention_user = self._get_config("enable_mention_user", True)
 
             for rule in rules:
                 if self._match_keyword(message, rule):
@@ -95,14 +96,15 @@ class KookManagerPlugin(Star):
 
                     logger.info(f"[KookManager] 关键词匹配: '{rule['keyword']}' -> 回复")
 
+                    chain = []
                     if enable_reply_quote:
-                        message_id = event.message_obj.message_id
-                        yield event.chain_result([
-                            Reply(id=message_id),
-                            Plain(text=response_text)
-                        ])
-                    else:
-                        yield event.plain_result(response_text)
+                        chain.append(Reply(id=event.message_obj.message_id))
+                    if enable_mention_user:
+                        chain.append(At(qq=event.get_sender_id()))
+                        chain.append(Plain(text=" "))
+                    chain.append(Plain(text=response_text))
+
+                    yield event.chain_result(chain)
 
                     only_first = self._get_config("only_first_match", True)
                     if only_first:
