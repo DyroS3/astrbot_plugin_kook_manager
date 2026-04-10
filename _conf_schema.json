@@ -1,0 +1,63 @@
+{
+  "welcome_channel_id": {
+    "description": "欢迎消息发送的目标频道ID",
+    "type": "string",
+    "default": "",
+    "hint": "在KOOK中右键频道 -> 复制ID"
+  },
+  "server_name": {
+    "description": "服务器名称, 显示在欢迎消息中",
+    "type": "string",
+    "default": "[FiveM] 夜未央"
+  },
+  "welcome_title": {
+    "description": "欢迎卡片标题",
+    "type": "string",
+    "default": "🎉 欢迎新成员加入!"
+  },
+  "welcome_message": {
+    "description": "欢迎消息内容, 使用 {user} 代表@用户, {server} 代表服务器名",
+    "type": "string",
+    "default": "欢迎加入 **{server}** 服务器!\n希望您能在这里体验到不同的游戏快乐 🚗"
+  },
+  "button1_text": {
+    "description": "第一个按钮的文字",
+    "type": "string",
+    "default": "📝 申请白名单"
+  },
+  "button1_link": {
+    "description": "第一个按钮跳转链接",
+    "type": "string",
+    "default": ""
+  },
+  "button2_text": {
+    "description": "第二个按钮的文字",
+    "type": "string",
+    "default": "🎮 连接服务器"
+  },
+  "button2_link": {
+    "description": "第二个按钮跳转链接",
+    "type": "string",
+    "default": ""
+  },
+  "show_guide_links": {
+    "description": "是否显示底部引导链接",
+    "type": "bool",
+    "default": true
+  },
+  "guide_text": {
+    "description": "底部引导文字, 支持KMarkdown格式",
+    "type": "string",
+    "default": "📌 新人必看 👉 (chn)规则一览(chn) 👉 (chn)公告通知(chn)\n(chn)角色请求(chn)\n💡 如有问题请联系管理员 | 祝您游戏愉快!"
+  },
+  "card_theme": {
+    "description": "卡片主题颜色: primary/success/danger/warning/info/secondary/none",
+    "type": "string",
+    "default": "none"
+  },
+  "card_color": {
+    "description": "卡片边框颜色 (16进制, 如 #7CFC00)",
+    "type": "string",
+    "default": "#7CFC00"
+  }
+}
