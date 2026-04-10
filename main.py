@@ -18,7 +18,11 @@ class KookManagerPlugin(Star):
 
     def _get_config(self, key: str, default=None):
         """获取配置项"""
-        return self.context.get_config(key, default)
+        try:
+            value = self.context.get_config(key)
+            return value if value is not None else default
+        except Exception:
+            return default
 
     def _parse_keyword_rules(self) -> list[dict]:
         """解析关键词规则配置"""
