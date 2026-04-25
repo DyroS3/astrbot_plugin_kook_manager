@@ -1,7 +1,7 @@
 [
   {
     "type": "card",
-    "theme": "primary",
+    "theme": "secondary",
     "size": "lg",
     "modules": [
       {
@@ -13,17 +13,58 @@
       },
       {
         "type": "section",
+        "mode": "right",
         "text": {
           "type": "kmarkdown",
-          "content": "(met){user_id}(met)\n\n欢迎来到本服务器! 希望您能在这里找到属于自己的乐趣 🚗"
+          "content": "(met){user_id}(met)\n\n欢迎加入 **{server_name}** 服务器!\n希望您能在这里体验到不同的游戏快乐 🚗"
+        },
+        "accessory": {
+          "type": "image",
+          "src": "{user_avatar}",
+          "size": "lg",
+          "circle": true
         }
+      },
+      {
+        "type": "action-group",
+        "elements": [
+          {
+            "type": "button",
+            "theme": "success",
+            "click": "link",
+            "value": "{apply_whitelist_url}",
+            "text": {
+              "type": "plain-text",
+              "content": "📝 申请白名单"
+            }
+          },
+          {
+            "type": "button",
+            "theme": "success",
+            "click": "link",
+            "value": "{connect_server_url}",
+            "text": {
+              "type": "plain-text",
+              "content": "🎮 连接服务器"
+            }
+          }
+        ]
       },
       {
         "type": "context",
         "elements": [
           {
             "type": "kmarkdown",
-            "content": "💡 如有问题请联系管理员 | 祝您游戏愉快!"
+            "content": "{navigation_text}"
+          }
+        ]
+      },
+      {
+        "type": "context",
+        "elements": [
+          {
+            "type": "kmarkdown",
+            "content": "💡 如有问题请联系管理员  |  祝您游戏愉快!"
           }
         ]
       }

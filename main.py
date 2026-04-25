@@ -27,7 +27,7 @@ LIFECYCLE_HOOK_MAX_WAIT_SECONDS = 120
 """等待官方 KOOK 适配器就绪的最长时间, 超过则放弃 hook"""
 
 
-@register("kook_manager", "YWY", "KOOK 群管理工具", "1.7.1")
+@register("kook_manager", "YWY", "KOOK 群管理工具", "1.7.2")
 class KookManagerPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -626,10 +626,22 @@ class KookManagerPlugin(Star):
         body = raw.get("extra", {}).get("body", {}) or {}
         guild_id = str(raw.get("target_id", "")).strip()
         user_id = str(body.get("user_id", "")).strip()
+
+        # 反查 KOOK 用户头像与昵称, 失败不会阻断后续渲染
+        user_avatar, user_name = await self._fetch_kook_user_info(guild_id, user_id)
+
         placeholders = {
             "user_id": user_id,
-            "user_name": user_id,  # KOOK joined_guild 通常仅含 user_id, 后续可扩展为反查昵称
+            "user_name": user_name,
+            "user_avatar": user_avatar,
             "guild_id": guild_id,
+            "server_name": str(self._get_config("welcome_server_name", "")).strip(),
+            "apply_whitelist_url": str(self._get_config("welcome_apply_whitelist_url", "")).strip(),
+            "connect_server_url": str(self._get_config("welcome_connect_server_url", "")).strip(),
+            "navigation_text": str(self._get_config(
+                "welcome_navigation_text",
+                "📢 新人必看  |  📖 规则一览  |  📢 公告通知  |  📋 角色请求",
+            )),
         }
 
         card_payload = self._load_welcome_card_payload(placeholders)
@@ -706,16 +718,62 @@ class KookManagerPlugin(Star):
                 logger.warning(f"[KookManager] 欢迎卡片模板不存在: {file_path}")
                 return None
             template = file_path.read_text(encoding="utf-8")
-            replaced = self._apply_placeholders(template, placeholders)
+            # 卡片模板走 JSON, 需对占位符值做 JSON 字符串转义, 避免昵称/URL 中的
+            # 双引号、反斜杠、控制字符破坏 JSON 结构
+            replaced = self._apply_placeholders(template, placeholders, json_safe=True)
             return self._load_card_payload(replaced, f"欢迎卡片 {file_path.name}")
         except Exception as exc:
             logger.error(f"[KookManager] 加载欢迎卡片模板失败: {exc}")
             return None
 
+    async def _fetch_kook_user_info(self, guild_id: str, user_id: str) -> tuple[str, str]:
+        """反查 KOOK 用户头像与昵称
+
+        Args:
+            guild_id: 服务器 ID, 为空时仅查询全局用户信息
+            user_id: KOOK 用户 ID
+
+        Returns:
+            tuple[str, str]: (avatar_url, display_name). 反查失败时返回 ("", user_id).
+        """
+        if not user_id:
+            return "", user_id
+        params: dict[str, Any] = {"user_id": user_id}
+        if guild_id:
+            params["guild_id"] = guild_id
+        try:
+            data = await self._request_kook_api("GET", "/user/view", params=params)
+            avatar = str(data.get("avatar", "")).strip()
+            nickname = (
+                str(data.get("nickname", "")).strip()
+                or str(data.get("username", "")).strip()
+            )
+            return avatar, nickname or user_id
+        except Exception as exc:
+            logger.warning(
+                f"[KookManager] 反查 KOOK 用户信息失败 user_id={user_id}: {exc}",
+            )
+            return "", user_id
+
     @staticmethod
-    def _apply_placeholders(text: str, placeholders: dict[str, str]) -> str:
-        """对模板做最简占位符替换, 不依赖 str.format 以避免 KMarkdown/JSON 中的花括号干扰"""
+    def _apply_placeholders(
+        text: str,
+        placeholders: dict[str, str],
+        json_safe: bool = False,
+    ) -> str:
+        """对模板做最简占位符替换, 不依赖 str.format 以避免 KMarkdown/JSON 中的花括号干扰
+
+        Args:
+            text: 原始模板字符串
+            placeholders: 占位符名 -> 值的映射
+            json_safe: 若为 True, 则对值做 JSON 字符串转义后再插入模板, 适用于卡片 JSON
+        """
         result = text
         for key, value in placeholders.items():
-            result = result.replace("{" + key + "}", value)
+            if json_safe:
+                # json.dumps 返回带外层双引号的字符串, 去掉外层双引号后即为合法的 JSON 字符串字面量
+                replaced_value = json.dumps(value, ensure_ascii=False)[1:-1]
+            else:
+                replaced_value = value
+            result = result.replace("{" + key + "}", replaced_value)
         return result

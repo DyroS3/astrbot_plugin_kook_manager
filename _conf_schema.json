@@ -77,6 +77,30 @@
     "default": "(met){user_id}(met) 欢迎加入本服务器! 祝您游戏愉快.",
     "hint": "当模板文件读取或 JSON 解析失败时, 改用此文本以 KMarkdown 形式发送, 可使用相同占位符"
   },
+  "welcome_server_name": {
+    "description": "欢迎卡片中显示的服务器名称",
+    "type": "string",
+    "default": "[FiveM] 夜未央",
+    "hint": "渲染到 {server_name} 占位符. 模板默认在欢迎语中突出显示该名称"
+  },
+  "welcome_apply_whitelist_url": {
+    "description": "欢迎卡片 \"申请白名单\" 按钮的跳转 URL",
+    "type": "string",
+    "default": "",
+    "hint": "渲染到 {apply_whitelist_url} 占位符. 留空时按钮仍会渲染但点击无效, 建议填写实际白名单申请页地址"
+  },
+  "welcome_connect_server_url": {
+    "description": "欢迎卡片 \"连接服务器\" 按钮的跳转 URL",
+    "type": "string",
+    "default": "",
+    "hint": "渲染到 {connect_server_url} 占位符. 一般填写 https://cfx.re/join/<server_id> 形式的 FiveM 加入链接"
+  },
+  "welcome_navigation_text": {
+    "description": "欢迎卡片底部导航行 KMarkdown 文本",
+    "type": "text",
+    "default": "📢 新人必看  |  📖 规则一览  |  📢 公告通知  |  📋 角色请求",
+    "hint": "渲染到 {navigation_text} 占位符. 可改为 KOOK 频道引用语法 (chn)channel_id(chn) 形成可点击跳转"
+  },
   "enable_farewell": {
     "description": "启用成员离开告别 (实验)",
     "type": "bool",
