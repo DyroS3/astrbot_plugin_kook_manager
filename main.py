@@ -27,7 +27,7 @@ LIFECYCLE_HOOK_MAX_WAIT_SECONDS = 120
 """等待官方 KOOK 适配器就绪的最长时间, 超过则放弃 hook"""
 
 
-@register("kook_manager", "YWY", "KOOK 群管理工具", "1.7.0")
+@register("kook_manager", "YWY", "KOOK 群管理工具", "1.7.1")
 class KookManagerPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)

@@ -39,7 +39,12 @@ ADAPTER_DESC = "KOOK 生命周期事件伴生适配器 (joined_guild / exited_gu
 @register_platform_adapter(
     ADAPTER_NAME,
     ADAPTER_DESC,
-    default_config_tmpl={},
+    default_config_tmpl={
+        "id": ADAPTER_NAME,
+        "type": ADAPTER_NAME,
+        "enable": False,
+    },
+    adapter_display_name="KOOK 生命周期事件 (伴生)",
 )
 class KookLifecycleAdapter(Platform):
     """KOOK 生命周期事件伴生适配器, 详见模块文档字符串"""

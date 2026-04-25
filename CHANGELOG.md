@@ -3,6 +3,18 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/),
 版本号遵循 [SemVer 2.0.0](https://semver.org/lang/zh-CN/).
 
+## [1.7.1] - 2026-04-26
+
+### 修复
+
+- 修复 `kook_lifecycle` 伴生适配器在 AstrBot WebUI「创建机器人」下拉列表中
+  不显示的问题. 根因是装饰器原本传入空 dict 作为 `default_config_tmpl`,
+  AstrBot dashboard 的 `_get_astrbot_config` 通过 `if platform.default_config_tmpl:`
+  过滤, 空 dict 被判为 False 从而跳过注入, 现改为显式提供 `id` / `type` /
+  `enable` 三个字段确保下拉列表能列出该适配器
+- 同步新增 `adapter_display_name="KOOK 生命周期事件 (伴生)"`, 让用户在
+  WebUI 看到中文友好名称
+
 ## [1.7.0] - 2026-04-25
 
 ### 新增
