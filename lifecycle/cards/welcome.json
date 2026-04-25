@@ -1,0 +1,32 @@
+[
+  {
+    "type": "card",
+    "theme": "primary",
+    "size": "lg",
+    "modules": [
+      {
+        "type": "header",
+        "text": {
+          "type": "plain-text",
+          "content": "🎉 欢迎新成员加入!"
+        }
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "kmarkdown",
+          "content": "(met){user_id}(met)\n\n欢迎来到本服务器! 希望您能在这里找到属于自己的乐趣 🚗"
+        }
+      },
+      {
+        "type": "context",
+        "elements": [
+          {
+            "type": "kmarkdown",
+            "content": "💡 如有问题请联系管理员 | 祝您游戏愉快!"
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -1,8 +1,9 @@
 """
 KOOK 群管理插件
-提供 KOOK 平台的群管理功能, 包括关键词自动回复等
+提供 KOOK 平台的群管理功能, 包括关键词自动回复, 主动消息发送, 以及新成员欢迎/告别等
 """
 
+import asyncio
 import json
 from pathlib import Path
 import re
@@ -14,12 +15,35 @@ from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api.message_components import Plain, Reply
 
+from .lifecycle.kook_lifecycle_adapter import KookLifecycleAdapter  # noqa: F401
 
-@register("kook_manager", "YWY", "KOOK 群管理工具", "1.6.0")
+LIFECYCLE_EVENT_TYPES = {
+    "joined_guild",
+    "exited_guild",
+}
+"""当前关注的 KOOK 系统事件子类型, 详见 KOOK 事件结构文档"""
+
+LIFECYCLE_HOOK_MAX_WAIT_SECONDS = 120
+"""等待官方 KOOK 适配器就绪的最长时间, 超过则放弃 hook"""
+
+
+@register("kook_manager", "YWY", "KOOK 群管理工具", "1.7.0")
 class KookManagerPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         self.config = config
+        self._lifecycle_hook_task: asyncio.Task | None = None
+        try:
+            loop = asyncio.get_running_loop()
+            self._lifecycle_hook_task = loop.create_task(
+                self._install_kook_lifecycle_hook(),
+                name="kook_manager_lifecycle_hook",
+            )
+        except RuntimeError:
+            logger.warning(
+                "[KookManager] 当前无运行中的事件循环, 跳过 lifecycle hook 安装. "
+                "如需新成员欢迎功能, 请确认 AstrBot 已启动事件循环",
+            )
 
     def _get_config(self, key: str, default=None):
         """获取配置项"""
@@ -426,3 +450,272 @@ class KookManagerPlugin(Star):
 
         except Exception as e:
             logger.error(f"[KookManager] 处理消息异常: {e}")
+
+    async def terminate(self) -> None:
+        """插件停止时清理 lifecycle hook 任务并恢复官方 KOOK 客户端原始回调"""
+        if self._lifecycle_hook_task and not self._lifecycle_hook_task.done():
+            self._lifecycle_hook_task.cancel()
+            try:
+                await self._lifecycle_hook_task
+            except (asyncio.CancelledError, Exception):
+                pass
+        self._uninstall_kook_lifecycle_hook()
+
+    async def _install_kook_lifecycle_hook(self) -> None:
+        """循环查找官方 KOOK 适配器并 hook 其 client.event_callback"""
+        deadline = asyncio.get_event_loop().time() + LIFECYCLE_HOOK_MAX_WAIT_SECONDS
+        while True:
+            kook_adapter = self._find_kook_adapter()
+            lifecycle_adapter = KookLifecycleAdapter.get_instance()
+            if kook_adapter is not None and lifecycle_adapter is not None:
+                client = getattr(kook_adapter, "client", None)
+                if client is not None and not getattr(client, "_lifecycle_hooked", False):
+                    self._wrap_client_callback(client, lifecycle_adapter)
+                    logger.info(
+                        "[KookManager] 已 hook 官方 KOOK 适配器, 开始监听生命周期事件",
+                    )
+                    return
+
+            if asyncio.get_event_loop().time() > deadline:
+                logger.warning(
+                    "[KookManager] 等待官方 KOOK 适配器或 kook_lifecycle 伴生适配器超时, "
+                    "生命周期事件 (新成员欢迎/告别) 不会被触发. "
+                    "请在 AstrBot 后台同时启用 kook 与 kook_lifecycle 平台适配器",
+                )
+                return
+
+            await asyncio.sleep(2)
+
+    def _find_kook_adapter(self):
+        """在 platform_manager 已加载的实例中查找官方 KOOK 适配器"""
+        try:
+            platform_manager = getattr(self.context, "platform_manager", None)
+            if platform_manager is None:
+                return None
+            for inst in platform_manager.get_insts():
+                try:
+                    if inst.meta().name == "kook":
+                        return inst
+                except Exception:
+                    continue
+        except Exception as exc:
+            logger.debug(f"[KookManager] 查找 KOOK 适配器异常: {exc}")
+        return None
+
+    def _wrap_client_callback(self, client, lifecycle_adapter: KookLifecycleAdapter) -> None:
+        """把官方 KookClient.event_callback 包装一层, 拦截关注的系统事件"""
+        original_callback = client.event_callback
+        plugin_self = self
+
+        async def wrapped_callback(event_data):
+            try:
+                bot_id = str(getattr(client, "bot_id", "")).strip()
+                plugin_self._maybe_emit_lifecycle_event(
+                    event_data, bot_id, lifecycle_adapter,
+                )
+            except Exception as exc:
+                logger.error(f"[KookManager] 转发生命周期事件失败: {exc}")
+            await original_callback(event_data)
+
+        client._lifecycle_original_callback = original_callback
+        client._lifecycle_hooked = True
+        client.event_callback = wrapped_callback
+
+    def _uninstall_kook_lifecycle_hook(self) -> None:
+        """恢复官方 KOOK 客户端的原始 event_callback (插件 terminate 时调用)"""
+        kook_adapter = self._find_kook_adapter()
+        if kook_adapter is None:
+            return
+        client = getattr(kook_adapter, "client", None)
+        if client is None or not getattr(client, "_lifecycle_hooked", False):
+            return
+        original_callback = getattr(client, "_lifecycle_original_callback", None)
+        if original_callback is not None:
+            client.event_callback = original_callback
+            try:
+                delattr(client, "_lifecycle_original_callback")
+            except AttributeError:
+                pass
+        client._lifecycle_hooked = False
+        logger.info("[KookManager] 已恢复官方 KOOK 适配器原始 event_callback")
+
+    def _maybe_emit_lifecycle_event(
+        self,
+        event_data: Any,
+        bot_id: str,
+        lifecycle_adapter: KookLifecycleAdapter,
+    ) -> None:
+        """判断是否为关注的 KOOK 系统事件, 若是则提交到伴生适配器"""
+        if event_data is None:
+            return
+
+        # KOOK SYSTEM 消息类型为 255, 兼容 IntEnum 与 int
+        type_value = getattr(event_data, "type", None)
+        type_value = getattr(type_value, "value", type_value)
+        try:
+            if int(type_value) != 255:
+                return
+        except (TypeError, ValueError):
+            return
+
+        extra = getattr(event_data, "extra", None)
+        if extra is None:
+            return
+        sub_type = str(getattr(extra, "type", "")).strip()
+        if sub_type not in LIFECYCLE_EVENT_TYPES:
+            return
+
+        # 把 pydantic 模型转成 dict, 让插件层不依赖具体类型
+        raw_dict = self._event_data_to_dict(event_data)
+        if not raw_dict:
+            logger.debug("[KookManager] 无法将事件序列化为 dict, 跳过")
+            return
+        lifecycle_adapter.commit_lifecycle_event(raw_dict, bot_id)
+
+    @staticmethod
+    def _event_data_to_dict(event_data: Any) -> dict[str, Any]:
+        """尽量把 KOOK 适配器内部的事件对象转成原生 dict"""
+        if isinstance(event_data, dict):
+            return event_data
+        for attr in ("to_dict", "model_dump"):
+            method = getattr(event_data, attr, None)
+            if callable(method):
+                try:
+                    if attr == "model_dump":
+                        result = method(mode="json", by_alias=True)
+                    else:
+                        result = method()
+                except Exception:
+                    continue
+                if isinstance(result, dict):
+                    return result
+        return {}
+
+    @filter.event_message_type(filter.EventMessageType.OTHER_MESSAGE)
+    async def on_kook_lifecycle_event(self, event: AstrMessageEvent):
+        """处理由 kook_lifecycle 伴生适配器投递的 KOOK 生命周期事件"""
+        platform_meta = getattr(event, "platform_meta", None)
+        platform_name = getattr(platform_meta, "name", "") if platform_meta else ""
+        if platform_name != "kook_lifecycle":
+            return
+
+        raw = getattr(event.message_obj, "raw_message", None)
+        if not isinstance(raw, dict):
+            return
+        sub_type = str(raw.get("extra", {}).get("type", "")).strip()
+        try:
+            if sub_type == "joined_guild":
+                await self._handle_member_joined(raw)
+            elif sub_type == "exited_guild":
+                await self._handle_member_exited(raw)
+        except Exception as exc:
+            logger.error(f"[KookManager] 处理 KOOK 生命周期事件失败: sub_type={sub_type}, {exc}")
+
+    async def _handle_member_joined(self, raw: dict[str, Any]) -> None:
+        """处理 joined_guild 事件: 加载欢迎卡片模板并发送到欢迎频道"""
+        if not bool(self._get_config("enable_welcome", False)):
+            return
+
+        channel_id = str(self._get_config("welcome_channel_id", "")).strip()
+        if not channel_id:
+            logger.warning(
+                "[KookManager] 已启用 enable_welcome 但 welcome_channel_id 为空, 跳过欢迎",
+            )
+            return
+
+        body = raw.get("extra", {}).get("body", {}) or {}
+        guild_id = str(raw.get("target_id", "")).strip()
+        user_id = str(body.get("user_id", "")).strip()
+        placeholders = {
+            "user_id": user_id,
+            "user_name": user_id,  # KOOK joined_guild 通常仅含 user_id, 后续可扩展为反查昵称
+            "guild_id": guild_id,
+        }
+
+        card_payload = self._load_welcome_card_payload(placeholders)
+        if card_payload is not None:
+            try:
+                await self._send_kook_channel_message(channel_id, card_payload, 10)
+                logger.info(
+                    f"[KookManager] 已发送欢迎卡片: channel_id={channel_id}, user_id={user_id}",
+                )
+                return
+            except Exception as exc:
+                logger.error(f"[KookManager] 发送欢迎卡片失败, 改用兜底文本: {exc}")
+
+        fallback_template = str(self._get_config(
+            "welcome_text_fallback",
+            "(met){user_id}(met) 欢迎加入本服务器! 祝您游戏愉快.",
+        ))
+        fallback_text = self._apply_placeholders(fallback_template, placeholders)
+        try:
+            await self._send_kook_channel_message(
+                channel_id,
+                self._normalize_text_content(fallback_text),
+                9,
+            )
+            logger.info(
+                f"[KookManager] 已发送欢迎兜底文本: channel_id={channel_id}, user_id={user_id}",
+            )
+        except Exception as exc:
+            logger.error(f"[KookManager] 发送欢迎兜底文本失败: {exc}")
+
+    async def _handle_member_exited(self, raw: dict[str, Any]) -> None:
+        """处理 exited_guild 事件: 发送告别消息 (实验功能, 默认关闭)"""
+        if not bool(self._get_config("enable_farewell", False)):
+            return
+
+        channel_id = str(self._get_config("farewell_channel_id", "")).strip()
+        if not channel_id:
+            logger.warning(
+                "[KookManager] 已启用 enable_farewell 但 farewell_channel_id 为空, 跳过告别",
+            )
+            return
+
+        body = raw.get("extra", {}).get("body", {}) or {}
+        placeholders = {
+            "user_id": str(body.get("user_id", "")).strip(),
+            "user_name": str(body.get("user_id", "")).strip(),
+            "guild_id": str(raw.get("target_id", "")).strip(),
+        }
+        template = str(self._get_config(
+            "farewell_text",
+            "👋 (met){user_id}(met) 已离开服务器, 期待下次再见.",
+        ))
+        text = self._apply_placeholders(template, placeholders)
+        try:
+            await self._send_kook_channel_message(
+                channel_id,
+                self._normalize_text_content(text),
+                9,
+            )
+            logger.info(
+                f"[KookManager] 已发送告别消息: channel_id={channel_id}, user_id={placeholders['user_id']}",
+            )
+        except Exception as exc:
+            logger.error(f"[KookManager] 发送告别消息失败: {exc}")
+
+    def _load_welcome_card_payload(self, placeholders: dict[str, str]) -> str | None:
+        """读取欢迎卡片模板, 替换占位符并返回标准化后的 KOOK Card JSON 字符串"""
+        raw_path = str(self._get_config("welcome_card_path", "lifecycle/cards/welcome.json")).strip()
+        if not raw_path:
+            return None
+        try:
+            file_path = self._resolve_card_file_path(raw_path)
+            if not file_path.exists() or not file_path.is_file():
+                logger.warning(f"[KookManager] 欢迎卡片模板不存在: {file_path}")
+                return None
+            template = file_path.read_text(encoding="utf-8")
+            replaced = self._apply_placeholders(template, placeholders)
+            return self._load_card_payload(replaced, f"欢迎卡片 {file_path.name}")
+        except Exception as exc:
+            logger.error(f"[KookManager] 加载欢迎卡片模板失败: {exc}")
+            return None
+
+    @staticmethod
+    def _apply_placeholders(text: str, placeholders: dict[str, str]) -> str:
+        """对模板做最简占位符替换, 不依赖 str.format 以避免 KMarkdown/JSON 中的花括号干扰"""
+        result = text
+        for key, value in placeholders.items():
+            result = result.replace("{" + key + "}", value)
+        return result

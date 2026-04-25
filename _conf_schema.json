@@ -52,5 +52,47 @@
     "type": "text",
     "default": "",
     "hint": "支持逗号分隔或每行一个 role_id. 权限模型为 AstrBot 管理员 OR KOOK 角色白名单"
+  },
+  "enable_welcome": {
+    "description": "启用新成员加入欢迎",
+    "type": "bool",
+    "default": false,
+    "hint": "需要同时在 AstrBot 后台启用 kook_lifecycle 平台适配器, 并填写 welcome_channel_id"
+  },
+  "welcome_channel_id": {
+    "description": "欢迎消息发送频道 ID",
+    "type": "string",
+    "default": "",
+    "hint": "新成员加入服务器后, 欢迎卡片会发送到这个 KOOK 频道"
+  },
+  "welcome_card_path": {
+    "description": "欢迎卡片模板路径",
+    "type": "string",
+    "default": "lifecycle/cards/welcome.json",
+    "hint": "支持相对插件目录的相对路径或绝对路径. 模板内可使用 {user_id}, {user_name}, {guild_id} 占位符"
+  },
+  "welcome_text_fallback": {
+    "description": "欢迎卡片加载失败时的兜底纯文本",
+    "type": "text",
+    "default": "(met){user_id}(met) 欢迎加入本服务器! 祝您游戏愉快.",
+    "hint": "当模板文件读取或 JSON 解析失败时, 改用此文本以 KMarkdown 形式发送, 可使用相同占位符"
+  },
+  "enable_farewell": {
+    "description": "启用成员离开告别 (实验)",
+    "type": "bool",
+    "default": false,
+    "hint": "目前仅作为骨架, 触发后会按照 farewell_text 发送一条 KMarkdown 提示"
+  },
+  "farewell_channel_id": {
+    "description": "告别消息发送频道 ID",
+    "type": "string",
+    "default": "",
+    "hint": "成员离开服务器后, 告别消息会发送到这个 KOOK 频道"
+  },
+  "farewell_text": {
+    "description": "告别消息文本",
+    "type": "text",
+    "default": "👋 (met){user_id}(met) 已离开服务器, 期待下次再见.",
+    "hint": "支持 {user_id}, {guild_id} 占位符. 仅在 enable_farewell 为 true 时生效"
   }
 }
